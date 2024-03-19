@@ -252,19 +252,18 @@ const createBusinessPayload = (myconfig, obj) => {
   }
 };
 
-const createBecknObject = (session, call, data, protocol) => {
-  const config = protocol;
+const createBecknObject = (session, type, data, config) => {
   if (config.sessionData) {
     const updatedSession = createPayload(
       config.sessionData,
-      call.type,
+      type,
       data,
       session
     );
 
     session = { ...session, ...updatedSession };
   }
-  const payload = createPayload(config.mapping, call.type, data, session);
+  const payload = createPayload(config.mapping, type, data, session);
 
   return { payload, session };
 };
