@@ -1,4 +1,4 @@
-export const mapping = {
+const mapping = {
   "metro-flow-1": {
     search_route: {
       mapping: [
@@ -502,7 +502,7 @@ export const mapping = {
         },
       ],
     },
-    on_search_route: {
+    on_search: {
       mapping: [
         {
           business_key: "name",
@@ -520,26 +520,6 @@ export const mapping = {
           business_key: "location",
           extractionPath:
             "message.catalog.providers[].fulfillments[].stops[]{locationName: location.descriptor.code}",
-        },
-        {
-          business_key: "error",
-          extractionPath: "error",
-        },
-      ],
-    },
-    on_search_trip: {
-      mapping: [
-        {
-          business_key: "name",
-          extractionPath: "message.catalog.descriptor.name",
-        },
-        {
-          business_key: "bpp_id",
-          extractionPath: "context.bpp_id",
-        },
-        {
-          business_key: "bpp_uri",
-          extractionPath: "context.bpp_uri",
         },
         {
           business_key: "items",

@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require("uuid");
-const logger = require("../../utils/logger").init();
+// const logger = require("../../utils/logger").init();
 
 const buildTags = (tags) => {
   return Object.keys(tags).map((key) => {
@@ -83,7 +83,7 @@ const createPayload = (config, action, data, session) => {
           item.compute ? eval(item.compute) : eval(item.value)
         );
     } catch (err) {
-      logger.info(item.value + " is undefined, will not be mapping that");
+      // logger.info(item.value + " is undefined, will not be mapping that");
     }
   });
 
@@ -216,9 +216,11 @@ const extractData = (obj, config, commData = {}) => {
     const data = {};
     item.value.map((val) => {
       if (!eval(val.value)) {
-        throw new Error(`key ${val.value} not found`);
+        console.log(`key ${val.value} not found`);
+        // data[val.key] = undefined;
+      } else {
+        data[val.key] = eval(val.value);
       }
-      data[val.key] = eval(val.value);
     });
     return { ...data, ...commData };
   }
@@ -247,7 +249,8 @@ const createBusinessPayload = (myconfig, obj) => {
 
     return payload;
   } catch (e) {
-    logger.info("error while creating bussniss payload", e);
+    // logger.info("error while creating bussniss payload", e);
+    console.log("error while creating bussniss payload", e);
     return payload;
   }
 };
@@ -298,7 +301,7 @@ const extractPath = (path, obj) => {
 
     return payload;
   } catch (e) {
-    logger.info("error while creating bussniss payload", e);
+    // logger.info("error while creating bussniss payload", e);
     return payload;
   }
 };
