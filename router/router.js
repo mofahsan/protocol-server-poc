@@ -4,10 +4,13 @@ const {
   createBecknObject,
   extractBusinessData,
 } = require("../core/mapper_core");
-const { insertSession, getSession } = require("../core/session");
-const { generateHeader } = require("../core/auth_core");
+const { insertSession, getSession ,generateSession} = require("../core/session");
+const { generateHeader,verifyHeader } = require("../core/auth_core");
 const { getCache } = require("../core/cache");
 const mapping = require("../test");
+const VERIFY_AUTH = process.env.VERIFY_AUTH
+const validateSchema = require("../core/schema")
+
 
 // buss > beckn
 router.post("/createPayload", async (req, res) => {
@@ -42,6 +45,8 @@ router.post("/createPayload", async (req, res) => {
 
     const { payload: becknPayload, session: updatedSession } =
       createBecknObject(session, type, data, protocol);
+
+
 
     becknPayload.context.bap_uri = `${process.env.CALLBACK_URL}/ondc`;
     let url;
@@ -87,9 +92,26 @@ router.post("/createPayload", async (req, res) => {
 
 // bkn > buss
 // router.post("/extractPayload", async (req, res) => {});
-
 router.post("/ondc/:method", async (req, res) => {
-  let body = req.body;
+  const body = req.body
+  const transaction_id = body?.context?.transaction_id
+  const config = body.context.action
+  if(VERIFY_AUTH ==='true'){
+    if(!verifyHeader(body)){
+      return res.status(401).send({message:"auth failed"})
+    }
+  }
+  let session = getSession(transaction_id)
+
+  if (!session) {
+   await  generateSession({version: body.context.version,country: body?.context?.location?.country?.code,cityCode: body?.context?.location?.city?.code,configName: "metro-flow-1",transaction_id: transaction_id});
+    session = getSession(transaction_id);
+  } 
+
+  if(!await validateSchema(body,session.schema[config])){
+    return res.status(400).send("schema validation failed")
+  }
+
 
   console.log("Revieved request:", JSON.stringify(body));
   handleRequest(body);
@@ -132,7 +154,7 @@ const handleRequest = async (response) => {
 
     const action = response?.context?.action;
     const messageId = response?.context?.message_id;
-
+    const is_buyer = action.split("_").length === 2? true : false
     if (!action) {
       return console.log("Action not defined");
     }
@@ -142,13 +164,24 @@ const handleRequest = async (response) => {
     }
 
     // extarct protocol mapping
-    const protocol = mapping[session.configName][action];
-
+    // const protocol = mapping[session.configName][action];
+    const protocol= session.protocolCalls[action].protocol;
+    // let becknPayload,updatedSession;
     // mapping/extraction
-    const { result: businessPayload, session: updatedSession } =
+    if(is_buyer){
+      const { result: businessPayload, session: updatedSession } =
       extractBusinessData(action, response, session, protocol);
+    }else{
+       const { payload: becknPayload, session: updatedSession } =createBecknObject(session, action, response, protocol);
+       insertSession(updatedSession);
+       const url =`${process.env.BACKEND_SERVER_URL}/${action}`
+       await axios.post(`${process.env.BACKEND_SERVER_URL}/${action}`, 
+        becknPayload
+      );
+      return
+        }
 
-    console.log("businessPayload", businessPayload);
+    console.log("businessPayload", becknPayload);
 
     insertSession(updatedSession);
 
@@ -168,3 +201,4 @@ const handleRequest = async (response) => {
 };
 
 module.exports = router;
+

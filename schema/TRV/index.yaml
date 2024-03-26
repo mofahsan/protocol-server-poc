@@ -2,3 +2,7 @@ search:
   $ref: ./search.yaml
 on_search:
   $ref: ./on_search.yaml
+select:
+  $ref: ./select.yaml
+on_select:
+  $ref: ./on_select.yaml

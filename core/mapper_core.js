@@ -120,6 +120,10 @@ const decodeInputString = (input) => {
     .split(/([\[\]\{\}])/)
     .filter((token) => token.trim() !== "");
 
+    if(input.split(".")[0]==='session'){
+      return tokens[0].split(".").join("?.")
+    }
+
   if (tokens.length === 1) {
     return "obj?." + tokens[0].split(".").join("?.");
   }
@@ -226,7 +230,7 @@ const extractData = (obj, config, commData = {}) => {
   }
 };
 
-const createBusinessPayload = (myconfig, obj) => {
+const createBusinessPayload = (myconfig, obj,session) => {
   const payload = {};
 
   try {
@@ -272,6 +276,7 @@ const createBecknObject = (session, type, data, config) => {
 };
 
 const extractBusinessData = (type, payload, session, protocol) => {
+
   if (protocol.sessionData) {
     const parsedSchema = createBusinessPayload(protocol.sessionData, payload);
 
@@ -280,7 +285,7 @@ const extractBusinessData = (type, payload, session, protocol) => {
     session = { ...session, ...parsedSchema };
   }
 
-  const result = createBusinessPayload(protocol.mapping, payload);
+  const result = createBusinessPayload(protocol.mapping, payload,session);
 
   return { result, session };
 };
