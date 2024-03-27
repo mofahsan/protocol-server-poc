@@ -4,6 +4,7 @@ const ajv = new Ajv({
   strict: "log",
 });
 const addFormats = require("ajv-formats");
+const { formatted_error } = require("../utils/utils");
 
 addFormats(ajv);
 require("ajv-errors")(ajv);

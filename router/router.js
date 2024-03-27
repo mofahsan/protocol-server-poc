@@ -17,7 +17,13 @@ router.post("/createPayload", async (req, res) => {
   console.log("inside create Payload ");
 
   try {
-    const { type, config, data, transactionId, target } = req.body;
+    //except target i can fetch rest from my payload
+    let { type, config, data, transactionId, target } = req.body;
+    let seller
+    if(data == undefined){
+      data = req.body,transactionId = data.context.transaction_id,type=data.context.action,config=type
+      seller = true
+    }
 
     let session = req.body.session;
 
@@ -28,7 +34,7 @@ router.post("/createPayload", async (req, res) => {
       insertSession(session.data);
       session = session.data;
     } else {
-      session = getSession(transactionId);
+      session = getSession(transactionId); // session will be premade with beckn to business usecase
 
       if (!session) {
         return res.status(400).send({ error: "session not found" });
@@ -39,7 +45,8 @@ router.post("/createPayload", async (req, res) => {
 
     ////////////// session validation ////////////////////
 
-    const protocol = mapping[session.configName][config];
+    // const protocol = mapping[session.configName][config];
+    const protocol= session.protocolCalls[config].protocol;
 
     ////////////// MAPPING/EXTRACTION ////////////////////////
 
@@ -47,18 +54,20 @@ router.post("/createPayload", async (req, res) => {
       createBecknObject(session, type, data, protocol);
 
 
-
-    becknPayload.context.bap_uri = `${process.env.CALLBACK_URL}/ondc`;
+    if(seller){
+      becknPayload.context.bpp_uri = `${process.env.CALLBACK_URL}/ondc`;
+    }else{
+      becknPayload.context.bap_uri = `${process.env.CALLBACK_URL}/ondc`;
+    }
+    
     let url;
 
     const GATEWAY_URL = process.env.GATEWAY_URL;
 
-    console.log("becknPayload", becknPayload);
-
     if (target === "GATEWAY") {
       url = GATEWAY_URL;
     } else {
-      url = becknPayload.context.bpp_uri;
+      url = seller?becknPayload.context.bap_uri:becknPayload.context.bpp_uri;
     }
 
     if (url[url.length - 1] != "/") {
