@@ -26,4 +26,16 @@ const formatted_error = (errors) => {
     return error_json;
   };
 
-module.exports= {formatted_error}
+  function parseBoolean(value) {
+    // Convert 'true' to true and 'false' to false
+    if (value === 'true') {
+        return true;
+    } else if (value === 'false') {
+        return false;
+    }
+    // Return null for other values
+    return null;
+}
+
+
+module.exports= {formatted_error,parseBoolean}

@@ -7,10 +7,13 @@ const {
 const { insertSession, getSession ,generateSession} = require("../core/session");
 const { generateHeader,verifyHeader } = require("../core/auth_core");
 const { getCache } = require("../core/cache");
+const {parseBoolean} = require("../utils/utils")
 const mapping = require("../test");
-const VERIFY_AUTH = process.env.VERIFY_AUTH
+const VERIFY_AUTH = parseBoolean(process.env.VERIFY_AUTH)
 const validateSchema = require("../core/schema")
-
+const SYNC = parseBoolean(process.env.SYNC)
+const PROTOCOL_SERVER = process.env.PROTOCOL_SERVER
+const SERVER_TYPE = process.env.SERVER_TYPE
 
 // buss > beckn
 router.post("/createPayload", async (req, res) => {
@@ -20,7 +23,7 @@ router.post("/createPayload", async (req, res) => {
     //except target i can fetch rest from my payload
     let { type, config, data, transactionId, target } = req.body;
     let seller
-    if(data == undefined){
+    if(SERVER_TYPE === "BPP"){
       data = req.body,transactionId = data.context.transaction_id,type=data.context.action,config=type
       seller = true
     }
@@ -53,13 +56,16 @@ router.post("/createPayload", async (req, res) => {
     const { payload: becknPayload, session: updatedSession } =
       createBecknObject(session, type, data, protocol);
 
+      if(SYNC){
+        return res.status(200).send(becknPayload)
+      }
 
-    if(seller){
+    if(SERVER_TYPE === "BPP"){
       becknPayload.context.bpp_uri = `${process.env.CALLBACK_URL}/ondc`;
     }else{
       becknPayload.context.bap_uri = `${process.env.CALLBACK_URL}/ondc`;
     }
-    
+
     let url;
 
     const GATEWAY_URL = process.env.GATEWAY_URL;
@@ -67,7 +73,7 @@ router.post("/createPayload", async (req, res) => {
     if (target === "GATEWAY") {
       url = GATEWAY_URL;
     } else {
-      url = seller?becknPayload.context.bap_uri:becknPayload.context.bpp_uri;
+      url = SERVER_TYPE === "BPP"?becknPayload.context.bap_uri:becknPayload.context.bpp_uri;
     }
 
     if (url[url.length - 1] != "/") {
@@ -123,14 +129,14 @@ router.post("/ondc/:method", async (req, res) => {
 
 
   console.log("Revieved request:", JSON.stringify(body));
-  handleRequest(body);
+  handleRequest(body,res);
 });
 
 router.get("/health", (req, res) => {
   res.send({ status: "working" });
 });
 
-const handleRequest = async (response) => {
+const handleRequest = async (response,res) => {
   // auth
 
   // schema validation
@@ -163,7 +169,6 @@ const handleRequest = async (response) => {
 
     const action = response?.context?.action;
     const messageId = response?.context?.message_id;
-    const is_buyer = action.split("_").length === 2? true : false
     if (!action) {
       return console.log("Action not defined");
     }
@@ -177,20 +182,28 @@ const handleRequest = async (response) => {
     const protocol= session.protocolCalls[action].protocol;
     // let becknPayload,updatedSession;
     // mapping/extraction
-    if(is_buyer){
+
+    if(SERVER_TYPE === "BAP"){
       const { result: businessPayload, session: updatedSession } =
       extractBusinessData(action, response, session, protocol);
     }else{
        const { payload: becknPayload, session: updatedSession } =createBecknObject(session, action, response, protocol);
        insertSession(updatedSession);
-       const url =`${process.env.BACKEND_SERVER_URL}/${action}`
-       await axios.post(`${process.env.BACKEND_SERVER_URL}/${action}`, 
+      //  schema/path
+      //  select/getticketapi
+      //  metro ondemand
+
+     const url =`${process.env.BACKEND_SERVER_URL}/${action}`
+     const mockResponse =   await axios.post(`${url}`, 
         becknPayload
       );
+      if(SYNC){
+        const finalResponse = await axios.post(`${PROTOCOL_SERVER}/createPayload`,mockResponse.data)
+        // res.status(200).send(finalResponse.data)
+      }
       return
         }
 
-    console.log("businessPayload", becknPayload);
 
     insertSession(updatedSession);
 
@@ -203,10 +216,8 @@ const handleRequest = async (response) => {
     });
   } catch (e) {
     console.log("error", e?.response?.data || e);
-    // res.status(500).send({ message: "Internal Server Error" });
   }
 
-  //////// SESSION VALIDATION //////////////
 };
 
 module.exports = router;
