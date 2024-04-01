@@ -77,9 +77,6 @@ flows:
     additioalFlows:
       - key: metro cancel flow
         value: metro-cancel-flow-1
-  
-  
-  
   - summary: metro cancel flow
     shouldDispaly: false # check
     id: metro-cancel-flow-1
