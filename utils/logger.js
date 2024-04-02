@@ -21,7 +21,7 @@ function getLogger() {
     level: {log:{
       level: "DEBUG",
       output_type: "file",
-      out_file: "log_file.log"
+      out_file: "/logs/log_file.log"
     }
   },
    

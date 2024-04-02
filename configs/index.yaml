@@ -65,13 +65,53 @@ flows:
           mimetype: text/html
           url: https://transitsolutions.com/mf/tnc.html
       payment_type: PRE-ORDER
-        
     input:
       $ref: ./configs/metro-flow-1/input.yaml
     protocol:
       $ref: ./configs/metro-flow-1/protocolMapping.yaml
     calls:
       $ref: ./configs/metro-flow-1/protocolCalls.yaml
+    api:
+      search:
+        default:
+          callback: "on_search"
+        get_all_station_codes:
+          condition:
+              operation:
+                type: AND
+                input:
+                  value:
+                  - operation:
+                      type: EQUAL
+                      title: Check search message code
+                      input:
+                        value:
+                          - operation:
+                              type: READ
+                              input:
+                                value: "req_body.context.actions"
+                          - undefined
+                  - operation:
+                        type: EQUAL
+                        title: Check search message code
+                        input:
+                          value:
+                            - operation:
+                                type: READ
+                                input:
+                                  value: "req_body.context.domain2"
+                            - "undefined"
+                  - operation:
+                        type: EQUAL
+                        title: Check search message code
+                        input:
+                          value:
+                            - operation:
+                                type: READ
+                                input:
+                                  value: "req_body.context.version22"
+                            - undefined
+          callback: "getallstationcode"
     schema:
       $ref: ./schema/TRV/index.yaml
     additioalFlows:

@@ -184,6 +184,10 @@ const handleRequest = async (response,res) => {
     // let becknPayload,updatedSession;
     // mapping/extraction
 
+    // console.log(action)
+   let callback=  dynamicReponse(response,session.api[action])
+    callback = callback?callback:action
+    
     if(SERVER_TYPE === "BAP"){
       const { result: businessPayload, session: updatedSession } =
       extractBusinessData(action, response, session, protocol);
@@ -194,7 +198,7 @@ const handleRequest = async (response,res) => {
       //  select/getticketapi
       //  metro ondemand
 
-     const url =`${process.env.BACKEND_SERVER_URL}/${action}`
+     const url =`${process.env.BACKEND_SERVER_URL}/${callback}`
      const mockResponse =   await axios.post(`${url}`, 
         becknPayload
       );
