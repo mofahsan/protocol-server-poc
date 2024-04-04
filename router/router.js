@@ -4,17 +4,36 @@ const {
   createBecknObject,
   extractBusinessData,
 } = require("../core/mapper_core");
-const { insertSession, getSession ,generateSession} = require("../core/session");
-const { generateHeader,verifyHeader } = require("../core/auth_core");
+const {
+  insertSession,
+  getSession,
+  generateSession,
+} = require("../core/session");
+const { generateHeader, verifyHeader } = require("../core/auth_core");
 const { getCache } = require("../core/cache");
 const {parseBoolean} = require("../utils/utils")
 const mapping = require("../test");
-const VERIFY_AUTH = parseBoolean(process.env.VERIFY_AUTH)
-const validateSchema = require("../core/schema")
-const SYNC = parseBoolean(process.env.SYNC)
-const PROTOCOL_SERVER = process.env.PROTOCOL_SERVER
+const IS_VERIFY_AUTH = parseBoolean(process.env.IS_VERIFY_AUTH)
+const IS_SYNC = parseBoolean(process.env.IS_SYNC)
+
+const validateSchema = require("../core/schema");
 const SERVER_TYPE = process.env.SERVER_TYPE
+
 const dynamicReponse = require("../core/operations/main")
+const calls = [
+  { config: "search_route" },
+  { config: "search_trip" },
+  { config: "select" },
+  { config: "init" },
+  { config: "confirm" },
+  { config: "status" },
+  { config: "on_search_route", endpoint: "mapper/ondc" },
+  { config: "on_search_trip", endpoint: "mapper/ondc" },
+  { config: "on_select", endpoint: "mapper/ondc" },
+  { config: "on_init", endpoint: "mapper/ondc" },
+  { config: "on_confirm", endpoint: "mapper/ondc" },
+  { config: "on_status", endpoint: "mapper/ondc" },
+];
 
 // buss > beckn
 router.post("/createPayload", async (req, res) => {
@@ -23,7 +42,7 @@ router.post("/createPayload", async (req, res) => {
   try {
     //except target i can fetch rest from my payload
     let { type, config, data, transactionId, target } = req.body;
-    let seller
+    let seller = false
     if(SERVER_TYPE === "BPP"){
       data = req.body,transactionId = data.context.transaction_id,type=data.context.action,config=type
       seller = true
@@ -35,8 +54,8 @@ router.post("/createPayload", async (req, res) => {
     ////////////// session validation ////////////////////
 
     if (session && session.createSession && session.data) {
-      insertSession(session.data);
-      session = session.data;
+      insertSession({ ...session.data, calls });
+      session = { ...session.data, calls };
     } else {
       session = getSession(transactionId); // session will be premade with beckn to business usecase
 
@@ -57,13 +76,12 @@ router.post("/createPayload", async (req, res) => {
     const { payload: becknPayload, session: updatedSession } =
       createBecknObject(session, type, data, protocol);
 
-      if(SYNC){
+      if(IS_SYNC){
         return res.status(200).send(becknPayload)
       }
-
-    if(SERVER_TYPE === "BPP"){
+    if (seller) {
       becknPayload.context.bpp_uri = `${process.env.CALLBACK_URL}/ondc`;
-    }else{
+    } else {
       becknPayload.context.bap_uri = `${process.env.CALLBACK_URL}/ondc`;
     }
 
@@ -98,9 +116,42 @@ router.post("/createPayload", async (req, res) => {
 
     //////////////////// SEND TO NETWORK /////////////////////////
 
+    /// UPDTTED CALLS ///////
+
+    const updatedCalls = calls.map((call) => {
+      const message_id = becknPayload.context.message_id;
+      if (call.config === config) {
+        call.message_id = message_id;
+        call.becknPayload = becknPayload;
+      }
+      if (call.config === `on_${config}`) {
+        call.message_id = message_id;
+      }
+      return call;
+    });
+
+    updatedSession.calls = updatedCalls;
+
+    /// UPDTTED CALLS ///////
+
     insertSession(updatedSession);
 
-    res.send({ updatedSession, becknPayload, becknReponse: response.data });
+    if (process.env.MODE === "SYNC") {
+      setTimeout(() => {
+        const newSession = getSession(transactionId);
+        let businessPayload = null;
+
+        newSession.calls.map((call) => {
+          if (call.config === `on_${config}`) {
+            businessPayload = call.businessPayload;
+          }
+        });
+
+        res.send({ newSession, businessPayload });
+      }, [3000]);
+    } else {
+      res.send({ updatedSession, becknPayload, becknReponse: response.data });
+    }
   } catch (e) {
     console.log(">>>>>", e);
   }
@@ -109,20 +160,26 @@ router.post("/createPayload", async (req, res) => {
 // bkn > buss
 // router.post("/extractPayload", async (req, res) => {});
 router.post("/ondc/:method", async (req, res) => {
-  const body = req.body
-  const transaction_id = body?.context?.transaction_id
-  const config = body.context.action
-  if(VERIFY_AUTH ==='true'){
-    if(!verifyHeader(body)){
-      return res.status(401).send({message:"auth failed"})
+  const body = req.body;
+  const transaction_id = body?.context?.transaction_id;
+  const config = body.context.action;
+  if (IS_VERIFY_AUTH === "true") {
+    if (!verifyHeader(body)) {
+      return res.status(401).send({ message: "auth failed" });
     }
   }
-  let session = getSession(transaction_id)
+  let session = getSession(transaction_id);
 
   if (!session) {
-   await  generateSession({version: body.context.version,country: body?.context?.location?.country?.code,cityCode: body?.context?.location?.city?.code,configName: "metro-flow-1",transaction_id: transaction_id});
+    await generateSession({
+      version: body.context.version,
+      country: body?.context?.location?.country?.code,
+      cityCode: body?.context?.location?.city?.code,
+      configName: "metro-flow-1",
+      transaction_id: transaction_id,
+    });
     session = getSession(transaction_id);
-  } 
+  }
 
   if(!await validateSchema(body,session.schema[config])){
     return res.status(400).send("schema validation failed")
@@ -130,14 +187,33 @@ router.post("/ondc/:method", async (req, res) => {
 
 
   console.log("Revieved request:", JSON.stringify(body));
-  handleRequest(body,res);
+  handleRequest(body);
+});
+
+router.post("/updateSession", async (req, res) => {
+  const { sessionData, transactionId } = req.body;
+  if (!sessionData || !transactionId) {
+    return res
+      .status(400)
+      .send({ message: "session Data || transcationID required" });
+  }
+
+  session = getSession(transactionId);
+
+  if (!session) {
+    return res.status(400).send({ message: "No session found" });
+  }
+
+  insertSession({ ...session, ...sessionData });
+
+  res.send({ message: "session updated" });
 });
 
 router.get("/health", (req, res) => {
   res.send({ status: "working" });
 });
 
-const handleRequest = async (response,res) => {
+const handleRequest = async (response) => {
   // auth
 
   // schema validation
@@ -170,6 +246,7 @@ const handleRequest = async (response,res) => {
 
     const action = response?.context?.action;
     const messageId = response?.context?.message_id;
+    const is_buyer = action.split("_").length === 2 ? true : false;
     if (!action) {
       return console.log("Action not defined");
     }
@@ -180,45 +257,57 @@ const handleRequest = async (response,res) => {
 
     // extarct protocol mapping
     // const protocol = mapping[session.configName][action];
-    const protocol= session.protocolCalls[action].protocol;
+    const protocol = session.protocolCalls[action].protocol;
     // let becknPayload,updatedSession;
     // mapping/extraction
-
-    // console.log(action)
-   let callback=  dynamicReponse(response,session.api[action])
+    let {callback,serviceUrl}=  dynamicReponse(response,session.api[action])
     callback = callback?callback:action
     
-    if(SERVER_TYPE === "BAP"){
+    if (is_buyer) {
       const { result: businessPayload, session: updatedSession } =
-      extractBusinessData(action, response, session, protocol);
-    }else{
-       const { payload: becknPayload, session: updatedSession } =createBecknObject(session, action, response, protocol);
-       insertSession(updatedSession);
-      //  schema/path
-      //  select/getticketapi
-      //  metro ondemand
+        extractBusinessData(action, response, session, protocol);
 
-     const url =`${process.env.BACKEND_SERVER_URL}/${callback}`
-     const mockResponse =   await axios.post(`${url}`, 
-        becknPayload
-      );
-      if(SYNC){
-        const finalResponse = await axios.post(`${PROTOCOL_SERVER}/createPayload`,mockResponse.data)
-        // res.status(200).send(finalResponse.data)
-      }
-      return
+      let urlEndpint = null;
+
+      console.log("updatedSession", updatedSession);
+
+      const updatedCalls = updatedSession.calls.map((call) => {
+        if (call?.message_id === response.context.message_id) {
+          call.becknPayload = response;
+          call.businessPayload = businessPayload;
+          urlEndpint = call.endpoint;
         }
 
+        return call;
+      });
 
-    insertSession(updatedSession);
+      updatedSession.calls = updatedCalls;
 
-    await axios.post(`${process.env.BACKEND_SERVER_URL}mapper/ondc`, {
-      businessPayload,
-      updatedSession,
-      messageId,
-      sessionId,
-      response,
-    });
+      insertSession(updatedSession);
+
+      if (process.env.MODE !== "SYNC") {
+        await axios.post(`${process.env.BACKEND_SERVER_URL}mapper/ondc`, {
+          businessPayload,
+          updatedSession,
+          messageId,
+          sessionId,
+          response,
+        });
+      }
+    } else {
+     
+      const { payload: becknPayload, session: updatedSession } =createBecknObject(session, action, response, protocol);
+      insertSession(updatedSession);
+      
+    const url =`${serviceUrl?serviceUrl:process.env.BACKEND_SERVER_URL}/${callback}`
+    const mockResponse =   await axios.post(`${url}`, 
+       becknPayload
+     );
+     if(IS_SYNC){
+       const finalResponse = await axios.post(`${PROTOCOL_SERVER}/createPayload`,mockResponse.data)
+     }
+     return
+    }
   } catch (e) {
     console.log("error", e?.response?.data || e);
   }
@@ -226,4 +315,3 @@ const handleRequest = async (response,res) => {
 };
 
 module.exports = router;
-

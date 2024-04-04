@@ -13,12 +13,12 @@ const dynamicReponse = (req_body,callback) =>{
             const result = operator.evaluateOperation(context, callback[payloads].condition?.operation)
             if(result)
             {
-              return callback[payloads].callback
+              return {callback: callback[payloads].callback , serviceUrl:callback[payloads].service_url}
             }   
           } 
         }
       }
-      return callback['default']
+      return {callback:callback['default']}
   }
 
   module.exports = dynamicReponse

@@ -65,6 +65,7 @@ flows:
           mimetype: text/html
           url: https://transitsolutions.com/mf/tnc.html
       payment_type: PRE-ORDER
+        
     input:
       $ref: ./configs/metro-flow-1/input.yaml
     protocol:
@@ -112,11 +113,79 @@ flows:
                                   value: "req_body.context.version22"
                             - undefined
           callback: "getallstationcode"
+          service_url: http://localhost:5500
+      select:
+        default:
+          callback: "on_select"
+        get_all_station_codes:
+          condition:
+              operation:
+                type: AND
+                input:
+                  value:
+                  - operation:
+                      type: EQUAL
+                      title: Check search message code
+                      input:
+                        value:
+                          - operation:
+                              type: READ
+                              input:
+                                value: "req_body.context.action"
+                          - select
+          callback: "getfare"
+          service_url: http://localhost:5500
+      init:
+        default:
+          callback: "on_init"
+        get_all_station_codes:
+          condition:
+              operation:
+                type: AND
+                input:
+                  value:
+                  - operation:
+                      type: EQUAL
+                      title: Check search message code
+                      input:
+                        value:
+                          - operation:
+                              type: READ
+                              input:
+                                value: "req_body.context.action"
+                          - init
+          callback: "getfare"
+          service_url: http://localhost:5500
+      confirm:
+        default:
+          callback: "on_confirm"
+        get_all_station_codes:
+          condition:
+              operation:
+                type: AND
+                input:
+                  value:
+                  - operation:
+                      type: EQUAL
+                      title: Check search message code
+                      input:
+                        value:
+                          - operation:
+                              type: READ
+                              input:
+                                value: "req_body.context.action"
+                          - confirm
+          callback: "confirmticket"
+          service_url: http://localhost:5500
+ 
     schema:
       $ref: ./schema/TRV/index.yaml
     additioalFlows:
       - key: metro cancel flow
         value: metro-cancel-flow-1
+  
+  
+  
   - summary: metro cancel flow
     shouldDispaly: false # check
     id: metro-cancel-flow-1
