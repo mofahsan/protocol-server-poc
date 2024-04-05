@@ -18,6 +18,8 @@ const IS_SYNC = parseBoolean(process.env.IS_SYNC)
 
 const validateSchema = require("../core/schema");
 const SERVER_TYPE = process.env.SERVER_TYPE
+const PROTOCOL_SERVER = process.env.PROTOCOL_SERVER
+const logger = require("../utils/logger").init()
 
 const dynamicReponse = require("../core/operations/main")
 const calls = [
@@ -35,6 +37,8 @@ const calls = [
   { config: "on_status", endpoint: "mapper/ondc" },
 ];
 
+const {signNack,errorNack,ack} = require("../utils/responses")
+
 // buss > beckn
 router.post("/createPayload", async (req, res) => {
   console.log("inside create Payload ");
@@ -50,7 +54,6 @@ router.post("/createPayload", async (req, res) => {
 
     let session = req.body.session;
 
-    console.log("sessions", session);
     ////////////// session validation ////////////////////
 
     if (session && session.createSession && session.data) {
@@ -76,14 +79,9 @@ router.post("/createPayload", async (req, res) => {
     const { payload: becknPayload, session: updatedSession } =
       createBecknObject(session, type, data, protocol);
 
-      if(IS_SYNC){
-        return res.status(200).send(becknPayload)
-      }
-    if (seller) {
-      becknPayload.context.bpp_uri = `${process.env.CALLBACK_URL}/ondc`;
-    } else {
+    if (!seller) {
       becknPayload.context.bap_uri = `${process.env.CALLBACK_URL}/ondc`;
-    }
+    } 
 
     let url;
 
@@ -136,7 +134,7 @@ router.post("/createPayload", async (req, res) => {
 
     insertSession(updatedSession);
 
-    if (process.env.MODE === "SYNC") {
+    if (IS_SYNC) {
       setTimeout(() => {
         const newSession = getSession(transactionId);
         let businessPayload = null;
@@ -153,6 +151,7 @@ router.post("/createPayload", async (req, res) => {
       res.send({ updatedSession, becknPayload, becknReponse: response.data });
     }
   } catch (e) {
+    res.status(500).send(errorNack)
     console.log(">>>>>", e);
   }
 });
@@ -160,12 +159,13 @@ router.post("/createPayload", async (req, res) => {
 // bkn > buss
 // router.post("/extractPayload", async (req, res) => {});
 router.post("/ondc/:method", async (req, res) => {
+  try{
   const body = req.body;
   const transaction_id = body?.context?.transaction_id;
   const config = body.context.action;
-  if (IS_VERIFY_AUTH === "true") {
-    if (!verifyHeader(body)) {
-      return res.status(401).send({ message: "auth failed" });
+  if (IS_VERIFY_AUTH) {
+    if (! await verifyHeader(body)) {
+      return res.status(401).send(signNack);
     }
   }
   let session = getSession(transaction_id);
@@ -181,13 +181,17 @@ router.post("/ondc/:method", async (req, res) => {
     session = getSession(transaction_id);
   }
 
-  if(!await validateSchema(body,session.schema[config])){
-    return res.status(400).send("schema validation failed")
+  if(!await validateSchema(body,session.schema[config],res)){
+    return  // fails schema validation if false
   }
 
 
   console.log("Revieved request:", JSON.stringify(body));
-  handleRequest(body);
+  handleRequest(body,res);
+}
+catch(err){
+  console.log(err)
+}
 });
 
 router.post("/updateSession", async (req, res) => {
@@ -213,7 +217,7 @@ router.get("/health", (req, res) => {
   res.send({ status: "working" });
 });
 
-const handleRequest = async (response) => {
+const handleRequest = async (response,res) => {
   // auth
 
   // schema validation
@@ -246,7 +250,7 @@ const handleRequest = async (response) => {
 
     const action = response?.context?.action;
     const messageId = response?.context?.message_id;
-    const is_buyer = action.split("_").length === 2 ? true : false;
+    const is_buyer = SERVER_TYPE==='BAP'?true:false
     if (!action) {
       return console.log("Action not defined");
     }
@@ -285,7 +289,7 @@ const handleRequest = async (response) => {
 
       insertSession(updatedSession);
 
-      if (process.env.MODE !== "SYNC") {
+      if (IS_SYNC) {
         await axios.post(`${process.env.BACKEND_SERVER_URL}mapper/ondc`, {
           businessPayload,
           updatedSession,
@@ -303,13 +307,21 @@ const handleRequest = async (response) => {
     const mockResponse =   await axios.post(`${url}`, 
        becknPayload
      );
-     if(IS_SYNC){
-       const finalResponse = await axios.post(`${PROTOCOL_SERVER}/createPayload`,mockResponse.data)
+     if(mockResponse.status===200){
+      res.send(ack)
      }
-     return
+     if(mockResponse)
+     if(IS_SYNC){
+      //  const final_resp = await 
+       axios.post(`${PROTOCOL_SERVER}/createPayload`,mockResponse.data)
+
+      //  if(final_resp.)
+     }
     }
+    // throw new Error("an error occurred")
   } catch (e) {
-    console.log("error", e?.response?.data || e);
+    logger.error(JSON.stringify(e))
+    res.status(500).send(errorNack)
   }
 
 };

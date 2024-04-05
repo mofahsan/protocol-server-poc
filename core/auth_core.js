@@ -64,12 +64,15 @@ const extractSubscriberId = (header) => {
 
 const verifyHeader = async (req) => {
   const headers = req.headers;
+  if(headers === undefined){
+    return false
+  }
   const public_key = await getPublicKey(LOOKUP_URI, headers);
   // logger.info(`Public key retrieved from registry : ${public_key}`);
   // const public_key = security.publickey;
   //Validate the request source against the registry
   const isValidSource = await isSignatureValid({
-    header: headers.authorization, // The Authorisation header sent by other network participants
+    header: headers?.authorization, // The Authorisation header sent by other network participants
     body: req.body,
     publicKey: public_key,
   });
