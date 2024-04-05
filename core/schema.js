@@ -1,16 +1,26 @@
-const validateSchema = async (context) => {
-    logger = log.init();
+const Ajv = require("ajv");
+const ajv = new Ajv({
+  allErrors: true,
+  strict: "log",
+});
+const addFormats = require("ajv-formats");
+
+addFormats(ajv);
+require("ajv-errors")(ajv);
+
+const validateSchema = async (payload,schema) => {
+    // logger = log.init();
     logger.info(
-      `Inside schema validation service for ${context?.req_body?.context?.action} api`
+      `Inside schema validation service for ${payload?.context?.action} api protocol server`
     );
     try {
-      const validate = ajv.compile(context.apiConfig.schema);
-      const valid = validate(context.req_body);
+      const validate = ajv.compile(schema);
+      const valid = validate(payload);
       if (!valid) {
         let error_list = validate.errors;
         logger.error(JSON.stringify(formatted_error(error_list)));
         logger.error("Schema validation : FAIL");
-        logger.error(context?.req_body?.context?.transaction_id)
+        logger.error(payload?.context?.transaction_id)
         return false;
       } else {
         logger.info("Schema validation : SUCCESS");

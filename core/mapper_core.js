@@ -1,5 +1,5 @@
 const { v4: uuidv4 } = require("uuid");
-const logger = require("../../utils/logger").init();
+const logger = require("../utils/logger").init();
 
 const buildTags = (tags) => {
   return Object.keys(tags).map((key) => {
