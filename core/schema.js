@@ -12,7 +12,7 @@ const logger = require("../utils/logger").init()
 const {schemaNack} = require("../utils/responses")
 // logger = log.init();
 
-const validateSchema = async (payload,schema,res) => {
+const validateSchema = async (payload,schema) => {
     
     logger.info(
       `Inside schema validation service for ${payload?.context?.action} api protocol server`
@@ -26,11 +26,10 @@ const validateSchema = async (payload,schema,res) => {
         logger.error("Schema validation : FAIL");
         logger.error(payload?.context?.transaction_id)
         schemaNack.error.path= JSON.stringify(formatted_error(error_list))
-        res.status(400).send(schemaNack)
-        return false;
+        return {status:false,message:schemaNack}
       } else {
         logger.info("Schema validation : SUCCESS");
-        return true;
+        return {status:true}
       }
     } catch (error) {
       logger.error(error);

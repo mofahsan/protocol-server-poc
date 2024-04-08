@@ -3,6 +3,9 @@ const fs = require("fs");
 const yaml = require("yaml");
 const path = require("path");
 const $RefParser = require("@apidevtools/json-schema-ref-parser");
+const {parseBoolean} = require("../utils/utils")
+const loadConfigFromGit = require("./loadConfig")
+const is_loadConfigFromGit = parseBoolean(process.env.is_loadConfigFromGit)
 
 const insertSession = (session) => {
   setCache("jm_" + session.transaction_id, session, 86400);
@@ -15,6 +18,7 @@ const getSession = (transaction_id) => {
 function loadConfig() {
   return new Promise(async (resolve, reject) => {
     try {
+      if(!is_loadConfigFromGit){
       const config = yaml.parse(
         fs.readFileSync(path.join(__dirname, "../configs/index.yaml"), "utf8")
       );
@@ -24,6 +28,12 @@ function loadConfig() {
       this.config = schema;
 
       resolve(schema);
+      }else{
+        const build_spec = await loadConfigFromGit()
+
+        resolve(build_spec[process.env.SERVER_TYPE])
+        // resolve()
+      }
     } catch (e) {
       throw new Error(e);
     }
@@ -34,6 +44,7 @@ const getConfigBasedOnFlow = async (flowId) => {
   return new Promise(async (resolve, reject) => {
     try {
       this.config = await loadConfig();
+
 
       let filteredInput = null;
       let filteredCalls = null;
@@ -93,7 +104,7 @@ async function generateSession(session_body) {
 
     const session = {
       ...session_body,
-      bap_id: "mobility-staging.ondc.org",
+      bap_id: process.env.SUBSCRIBER_ID,
       bap_uri: process.env.callbackUrl,
       ttl: "PT10M",
       domain: filteredDomain,

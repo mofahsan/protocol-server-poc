@@ -5,8 +5,8 @@ const {
 
 const LOOKUP_URI = process.env.ondc_LOOKUP_URI,
   PRIVATE_KEY = process.env.PRIVATE_KEY,
-  BAPID = process.env.BAPID,
-  UNIQUE_KEY = process.env.UNIQUE_KEY;
+  BAPID = process.env.SUBSCRIBER_ID,
+  UNIQUE_KEY = process.env.SUBSCRIBER_UNIQUE_KEY;
 
 async function generateHeader(message) {
   const result = await createAuthorizationHeader({

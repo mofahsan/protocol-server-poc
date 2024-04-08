@@ -181,7 +181,7 @@ protocol:
         value: data.trips
       - beckn_key: message.order.quote.price.value
         value: data.price
-      - beckn_key: message.order.quote.price.currency
+      - beckn_key: m ssage.order.quote.price.currency
         value: session.currency
       - beckn_key: message.order.cancellation_terms
         value: data.cancellation_terms || session.cancellation_terms
